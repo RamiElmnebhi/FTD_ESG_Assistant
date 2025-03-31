@@ -1,2 +1,2 @@
 openai_api_key: 'YOUR_KEY_HERE'
-model: 'gpt-3.5-turbo'
+model: 'gpt-4o-mini'

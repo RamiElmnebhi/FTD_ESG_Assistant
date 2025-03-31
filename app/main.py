@@ -1,1 +1,1 @@
-# Placeholder for Streamlit or FastAPI app
+# Placeholder for Streamlit or Gradio app
