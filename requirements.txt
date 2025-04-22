@@ -1,7 +1,0 @@
-openai
-langchain
-faiss-cpu
-PyMuPDF
-streamlit
-pdfplumber
-ragas
