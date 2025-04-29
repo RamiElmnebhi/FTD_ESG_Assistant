@@ -1,9 +1,17 @@
 # llamaindex_rag_demo.py
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
-from llama_index.core import StorageContext, load_index_from_storage
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.settings import Settings
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.llms.openai import OpenAI
+from llama_index.core.node_parser import SentenceSplitter
 import os
 import openai
 import yaml
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Load configuration
 def load_config():
@@ -15,37 +23,39 @@ def load_config():
 config = load_config()
 openai.api_key = config['openai_api_key']
 
-# Define persistent storage location
-INDEX_PATH = "llamaindex_storage"
+# Setup your custom LLM + Embedder
+Settings.llm = OpenAI(model=config['completion_model'], temperature=0)
+Settings.embed_model = OpenAIEmbedding(model=config['embedding_model'])
 
-# Step 1 — Load the document
-print("🔹 Loading PDF from ./data directory...")
-reader = SimpleDirectoryReader(input_dir="./data", recursive=True)
-documents = reader.load_data()
-print(f"🔸 Loaded {len(documents)} documents")
+# Load and index documents
+logger.info("🔹 Loading and indexing documents...")
+docs = SimpleDirectoryReader("./data").load_data()
+logger.info(f"🔸 Loaded {len(docs)} documents")
 
-# Step 2 — Either load or create the index
-if os.path.exists(INDEX_PATH):
-    print("🔹 Loading existing index...")
-    storage_context = StorageContext.from_defaults(persist_dir=INDEX_PATH)
-    index = load_index_from_storage(storage_context)
-else:
-    print("🔹 Building new index and saving it...")
-    index = VectorStoreIndex.from_documents(documents)
-    index.storage_context.persist(persist_dir=INDEX_PATH)
+splitter = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+nodes = splitter.get_nodes_from_documents(docs)
+logger.info(f"Created {len(nodes)} chunks from documents")
 
-# Step 3 — Create a query engine
+index = VectorStoreIndex(nodes)
 query_engine = index.as_query_engine(similarity_top_k=5)
 
-# Step 4 — Ask a question
-print("\n💬 Ask a question about the document:")
-query = input(">> ")
+# Main interaction loop
+while True:
+    print("\n💬 Ask a question about the document (or type 'exit' to quit):")
+    question = input(">> ")
+    
+    if question.lower() == 'exit':
+        break
+        
+    logger.info("Processing query...")
+    response = query_engine.query(question)
+    
+    print("\n🧠 LLM Response:")
+    print(response.response)
 
-response = query_engine.query(query)
-
-print("\n🧠 LLM Response:")
-print(response.response)
-
-print("\n📚 Source Chunks Used:")
-for node in response.source_nodes:
-    print("–", node.node.get_content().strip()[:300], "...")
+    print("\n📚 Source Chunks Used:")
+    for i, node in enumerate(response.source_nodes):
+        print(f"\nChunk {i+1}:")
+        print("```")
+        print(node.node.text.strip())
+        print("```")
